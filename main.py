@@ -90,22 +90,18 @@ while running:
     if keys[K_d]:
         player.x += player.moveSpeed
 
-    if keys[K_LEFT]:
-        offsetX -= 1
-    if keys[K_RIGHT]:
-        offsetX += 1
 
     player.update()
 
     if player.x - offsetX > SCREEN_WIDTH - 300:
         offsetX += ((player.x - offsetX) - (SCREEN_WIDTH - 300))/20
     if player.x - offsetX < 300:
-        offsetX -= 2
+        offsetX += (player.x - offsetX - 300)/20
 
     if player.y - offsetY > SCREEN_HEIGHT - 300:
-        offsetY += 2
+        offsetY += ((player.y - offsetY) - (SCREEN_HEIGHT - 300))/20
     if player.y - offsetY < 300:
-        offsetY -= 2
+        offsetY += (player.y - offsetY - 300)/20
 
 
 
