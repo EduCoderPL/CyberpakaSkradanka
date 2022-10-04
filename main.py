@@ -29,7 +29,7 @@ class Player:
         self.rect = pygame.Rect(self.x - self.diameter / 2, self.y - self.diameter / 2, self.diameter, self.diameter)
 
     def draw(self):
-        pygame.draw.circle(screen, (0, 0, 255), (self.x, self.y), self.diameter)
+        pygame.draw.circle(screen, (0, 0, 255), (self.x - offsetX, self.y - offsetY), self.diameter)
 
 
 class Tree:
@@ -50,8 +50,8 @@ class Tree:
         alphaChannel = 128 if self.isPlayerInside else 255
 
 
-        pygame.draw.circle(screen, (160,82,45), (self.x, self.y), 30)
-        draw_circle_alpha(screen, (0, 80, 0, alphaChannel), (self.x, self.y), self.diameter/2)
+        pygame.draw.circle(screen, (160,82,45), (self.x - offsetX, self.y - offsetY), 30)
+        draw_circle_alpha(screen, (0, 80, 0, alphaChannel), (self.x - offsetX, self.y - offsetY), self.diameter/2)
 
 
 pygame.init()
@@ -70,9 +70,9 @@ clock = pygame.time.Clock()
 player = Player(250, 250, 2)
 
 treeList = []
-for i in range(30):
-    randX = random.randint(50, SCREEN_WIDTH - 50)
-    randY = random.randint(50, SCREEN_HEIGHT - 50)
+for i in range(1000):
+    randX = random.randint(-5000, 5000)
+    randY = random.randint(-5000, 5000)
     randDiameter = random.randint(100, 200)
     tree = Tree(randX, randY, randDiameter)
     treeList.append(tree)
@@ -90,7 +90,24 @@ while running:
     if keys[K_d]:
         player.x += player.moveSpeed
 
+    if keys[K_LEFT]:
+        offsetX -= 1
+    if keys[K_RIGHT]:
+        offsetX += 1
+
     player.update()
+
+    if player.x - offsetX > SCREEN_WIDTH - 300:
+        offsetX += ((player.x - offsetX) - (SCREEN_WIDTH - 300))/20
+    if player.x - offsetX < 300:
+        offsetX -= 2
+
+    if player.y - offsetY > SCREEN_HEIGHT - 300:
+        offsetY += 2
+    if player.y - offsetY < 300:
+        offsetY -= 2
+
+
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
