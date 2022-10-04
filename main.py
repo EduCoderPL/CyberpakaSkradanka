@@ -1,3 +1,4 @@
+# TU SĄ BIBLIOTEKI PYTHONA
 import pygame
 from pygame.constants import *
 import random
