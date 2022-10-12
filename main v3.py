@@ -1,5 +1,6 @@
 # BIBLIOTEKI PYTHONA
 import math
+import time
 
 import pygame
 from pygame.constants import *
@@ -19,6 +20,7 @@ def draw_circle_alpha(surface, color, center, radius):
     shape_surf = pygame.Surface(target_rect.size, pygame.SRCALPHA)
     pygame.draw.circle(shape_surf, color, (radius, radius), radius)
     surface.blit(shape_surf, target_rect)
+
 
 # Funkcja sprawdzająca kolizje między dwoma okrągłymi obiektami.
 def checkCircleCollision(firstObject, staticObject):
@@ -78,6 +80,10 @@ class Player:
         self.y = y
         self.moveSpeed = moveSpeed
         self.radius = radius
+        self.pistol = Pistol(self, Bullet, 8, 2)
+
+    def update(self):
+        self.pistol.update()
 
     def draw(self):
         pygame.draw.circle(screen, (0, 0, 255), (self.x - offsetX, self.y - offsetY), self.radius)
@@ -85,6 +91,8 @@ class Player:
 
 # Klasa drzewa
 class CoreTree:
+    """Robię tę klasę osobno tylko po to, żeby pnie miały niezależne kolizje."""
+
     def __init__(self, x, y, radius=30):
         self.x = x
         self.y = y
@@ -95,6 +103,8 @@ class CoreTree:
 
 
 class Tree:
+    """Po prostu drzewo, pod które można się schować."""
+
     def __init__(self, x, y, radius=120):
         self.x = x
         self.y = y
@@ -115,44 +125,79 @@ class Tree:
 class Enemy:
     """Klasa przeciwnika, który chodzi dokładnie za nami i nas ściga."""
 
-    def __init__(self, x, y, target, speed=1):
+    def __init__(self, x, y, target=None, speed=1):
         self.x = x
         self.y = y
         self.target = target
         self.radius = 20
         self.speed = speed
+        self.bulletParticles = []
 
     def move(self):
         """Wróg porusza się w stronę celu."""
+
         vectorToTargetNorm = normalize((self.target.x - self.x, self.target.y - self.y))
         self.x += vectorToTargetNorm[0] * self.speed
         self.y += vectorToTargetNorm[1] * self.speed
 
     def draw(self):
-        """Rysujemy przeciwnika"""
+        """Rysujemy pocisk"""
         pygame.draw.circle(screen, (255, 0, 0), (self.x - offsetX, self.y - offsetY), self.radius)
 
 
 class Bullet:
     """Klasa pocisku, którym może strzelać gracz."""
 
-    def __init__(self, x, y, direction, speed=3):
+    def __init__(self, x, y, direction, speed=3, maxLifeTime=5.):
         self.x = x
         self.y = y
         self.radius = 4
         self.direction = direction
         self.speed = speed
-
+        self.maxLifeTime = maxLifeTime
+        self.startLifetime = time.time()
 
     def move(self):
-
-        """Wróg porusza się w stronę celu."""
+        """Pociski poruszają się w stronę wyznaczoną przez zmienną direction i usuwają, kiedy przekroczymy czas życia"""
         self.x += self.direction[0] * self.speed
         self.y += self.direction[1] * self.speed
+
+        if self.startLifetime + self.maxLifeTime < time.time():
+            del self
 
     def draw(self):
         """Rysujemy przeciwnika"""
         pygame.draw.circle(screen, (255, 255, 0), (self.x - offsetX, self.y - offsetY), self.radius)
+
+
+class Pistol:
+    def __init__(self, owner, bullet, clipsize=8, reloadTime=2):
+        self.owner = owner
+        self.bullet = bullet
+        self.clipsize = clipsize
+        self.bulletsInClip = self.clipsize
+        self.reloadTime = reloadTime
+        self.reloadStart = None
+
+
+    def fire(self, target):
+        if self.bulletsInClip > 0:
+            self.bulletsInClip -= 1
+            x, y = target
+            bulletList.append(
+                self.bullet(self.owner.x, self.owner.y,
+                            normalize((x - (self.owner.x - offsetX), y - (self.owner.y - offsetY))), 10))
+
+    def update(self):
+        if self.reloadStart:
+            if self.bulletsInClip == 0 and time.time() > self.reloadStart + self.reloadTime:
+                self.bulletsInClip = self.clipsize
+                self.reloadStart = None
+
+    def reload(self):
+        if self.bulletsInClip == 0:
+            self.reloadStart = time.time()
+
 
 pygame.init()
 FPS = 60
@@ -172,6 +217,8 @@ enemyList = []
 
 bulletList = []
 # Tworzenie drzew
+
+
 for i in range(300):
     randX = random.randint(-2000, 2000)
     randY = random.randint(-2000, 2000)
@@ -180,7 +227,7 @@ for i in range(300):
     treeList.append(tree)
 
 # Tworzenie przeciwników
-for i in range(30):
+for i in range(60):
     randX = random.randint(-2000, 2000)
     randY = random.randint(-2000, 2000)
     randDiameter = random.randint(100, 200)
@@ -190,6 +237,8 @@ for i in range(30):
     enemyList.append(enemy)
 
 pygame.event.set_allowed([QUIT, KEYDOWN, KEYUP])
+
+nextSpawnTime = time.time() + 4
 
 running = 1
 while running:
@@ -204,8 +253,8 @@ while running:
         player.x -= player.moveSpeed
     if keys[K_d]:
         player.x += player.moveSpeed
-
-
+    if keys[K_r]:
+        player.pistol.reload()
 
     # Zabezpieczanie gracza przed opuszczeniem obszaru;
     if player.x - offsetX > SCREEN_WIDTH - 300:
@@ -218,6 +267,7 @@ while running:
     if player.y - offsetY < 300:
         offsetY += (player.y - offsetY - 300) / 20
 
+    player.update()
     # Wykrywanie kolizji drzew
     for tree in treeList:
         tree.isPlayerInside = checkCircleCollision(player, tree)
@@ -251,9 +301,18 @@ while running:
 
         for enemy in enemyList:
             if checkCircleCollision(bullet, enemy):
-                bulletList.remove(bullet)
-                enemyList.remove(enemy)
+                try:
+                    bulletList.remove(bullet)
+                except:
+                    pass
+                try:
+                    enemyList.remove(enemy)
+                except:
+                    continue
 
+    if time.time() > nextSpawnTime:
+        nextSpawnTime += 4
+        enemyList.append(Enemy(4000, random.randint(-2000, 2000), player, random.randint(1, 5)))
 
     # Bez tego nie wyjdziesz z gry
     for event in pygame.event.get():
@@ -262,9 +321,7 @@ while running:
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             if pygame.mouse.get_pressed()[0]:
-                x, y = pygame.mouse.get_pos()
-                bulletList.append(
-                    Bullet(player.x, player.y, normalize((x - (player.x - offsetX), y - (player.y - offsetY))), 10))
+                player.pistol.fire(pygame.mouse.get_pos())
 
     # ================== RYSOWANIE OBIEKTÓW ====================
     screen.fill((0, 180, 0))
