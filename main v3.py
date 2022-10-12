@@ -7,8 +7,6 @@ import random
 
 
 # Funkcje pozwalające rysować przezroczyste powierzchnie:
-
-# Prostokąt
 def draw_rect_alpha(surface, color, rect):
     shape_surf = pygame.Surface(pygame.Rect(rect).size, pygame.SRCALPHA)
     pygame.draw.rect(shape_surf, color, shape_surf.get_rect())
@@ -21,7 +19,6 @@ def draw_circle_alpha(surface, color, center, radius):
     shape_surf = pygame.Surface(target_rect.size, pygame.SRCALPHA)
     pygame.draw.circle(shape_surf, color, (radius, radius), radius)
     surface.blit(shape_surf, target_rect)
-
 
 # Funkcja sprawdzająca kolizje między dwoma okrągłymi obiektami.
 def checkCircleCollision(firstObject, staticObject):
@@ -40,13 +37,13 @@ def checkCircleCollision(firstObject, staticObject):
 
 # Funkcja, która sprawia, że dwa obiekty (koliste) nie nachodzą na siebie;
 
-def bounce(firstObject, staticObject):
-    # Dane w osobnych zmiennych
+def bounce(firstObject, secondObject):
+    # Dane w osobnych zmiennychaw
     x1, y1 = firstObject.x, firstObject.y
-    x2, y2 = staticObject.x, staticObject.y
+    x2, y2 = secondObject.x, secondObject.y
 
     diam1 = firstObject.radius
-    diam2 = staticObject.radius
+    diam2 = secondObject.radius
 
     # Pozyskanie informacji o kącie wektora między dwoma punktami.
     angle = math.atan2(y2 - y1, x2 - x1)
@@ -75,6 +72,7 @@ def normalize(vector):
 # Klasa gracza
 class Player:
     """Klasa gracza."""
+
     def __init__(self, x, y, moveSpeed, radius=20):
         self.x = x
         self.y = y
@@ -84,30 +82,40 @@ class Player:
     def draw(self):
         pygame.draw.circle(screen, (0, 0, 255), (self.x - offsetX, self.y - offsetY), self.radius)
 
+
 # Klasa drzewa
+class CoreTree:
+    def __init__(self, x, y, radius=30):
+        self.x = x
+        self.y = y
+        self.radius = radius
+
+    def draw(self):
+        pygame.draw.circle(screen, (160, 82, 45), (self.x - offsetX, self.y - offsetY), self.radius)
+
+
 class Tree:
-    def __init__(self, x, y, diameter=120):
+    def __init__(self, x, y, radius=120):
         self.x = x
         self.y = y
         self.isPlayerInside = False
 
-        self.radius = diameter
-        self.secondDiameter = 30
+        self.radius = radius
+        self.core = CoreTree(self.x, self.y, 30)
 
     def draw(self):
         alphaChannel = 128 if self.isPlayerInside else 255
 
         if -100 < self.x - offsetX < SCREEN_WIDTH + 100:
             if -100 < self.y - offsetY < SCREEN_HEIGHT + 100:
-                pygame.draw.circle(screen, (160, 82, 45), (self.x - offsetX, self.y - offsetY), 30)
+                self.core.draw()
                 draw_circle_alpha(screen, (0, 80, 0, alphaChannel), (self.x - offsetX, self.y - offsetY), self.radius)
-
 
 
 class Enemy:
     """Klasa przeciwnika, który chodzi dokładnie za nami i nas ściga."""
 
-    def __init__(self, x, y, target, speed = 1):
+    def __init__(self, x, y, target, speed=1):
         self.x = x
         self.y = y
         self.target = target
@@ -125,6 +133,27 @@ class Enemy:
         pygame.draw.circle(screen, (255, 0, 0), (self.x - offsetX, self.y - offsetY), self.radius)
 
 
+class Bullet:
+    """Klasa pocisku, którym może strzelać gracz."""
+
+    def __init__(self, x, y, direction, speed=3):
+        self.x = x
+        self.y = y
+        self.radius = 4
+        self.direction = direction
+        self.speed = speed
+
+
+    def move(self):
+
+        """Wróg porusza się w stronę celu."""
+        self.x += self.direction[0] * self.speed
+        self.y += self.direction[1] * self.speed
+
+    def draw(self):
+        """Rysujemy przeciwnika"""
+        pygame.draw.circle(screen, (255, 255, 0), (self.x - offsetX, self.y - offsetY), self.radius)
+
 pygame.init()
 FPS = 60
 
@@ -141,6 +170,7 @@ player = Player(250, 250, 2)
 treeList = []
 enemyList = []
 
+bulletList = []
 # Tworzenie drzew
 for i in range(300):
     randX = random.randint(-2000, 2000)
@@ -175,6 +205,8 @@ while running:
     if keys[K_d]:
         player.x += player.moveSpeed
 
+
+
     # Zabezpieczanie gracza przed opuszczeniem obszaru;
     if player.x - offsetX > SCREEN_WIDTH - 300:
         offsetX += ((player.x - offsetX) - (SCREEN_WIDTH - 300)) / 20
@@ -190,8 +222,8 @@ while running:
     for tree in treeList:
         tree.isPlayerInside = checkCircleCollision(player, tree)
 
-        if checkCircleCollision(player, tree):
-            bounce(player, tree)
+        if checkCircleCollision(player, tree.core):
+            bounce(player, tree.core)
 
     # Akcje przeciwników
     for enemy in enemyList:
@@ -207,13 +239,32 @@ while running:
                     bounce(enemy, secondEnemy)
 
         for tree in treeList:
-            if checkCircleCollision(enemy, tree):
-                bounce(enemy, tree)
+            if checkCircleCollision(enemy, tree.core):
+                bounce(enemy, tree.core)
+
+    for bullet in bulletList:
+        bullet.move()
+
+        for tree in treeList:
+            if checkCircleCollision(bullet, tree.core):
+                bulletList.remove(bullet)
+
+        for enemy in enemyList:
+            if checkCircleCollision(bullet, enemy):
+                bulletList.remove(bullet)
+                enemyList.remove(enemy)
+
 
     # Bez tego nie wyjdziesz z gry
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = 0
+
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if pygame.mouse.get_pressed()[0]:
+                x, y = pygame.mouse.get_pos()
+                bulletList.append(
+                    Bullet(player.x, player.y, normalize((x - (player.x - offsetX), y - (player.y - offsetY))), 10))
 
     # ================== RYSOWANIE OBIEKTÓW ====================
     screen.fill((0, 180, 0))
@@ -224,6 +275,9 @@ while running:
 
     for tree in treeList:
         tree.draw()
+
+    for bullet in bulletList:
+        bullet.draw()
 
     pygame.display.update()
     clock.tick(FPS)
