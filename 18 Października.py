@@ -7,6 +7,7 @@ from pygame.constants import *
 import random
 
 
+
 # Funkcje pozwalające rysować przezroczyste powierzchnie:
 def draw_rect_alpha(surface, color, rect):
     shape_surf = pygame.Surface(pygame.Rect(rect).size, pygame.SRCALPHA)
@@ -71,6 +72,11 @@ def normalize(vector):
     return vectorToTargetNorm
 
 
+def draw_text(text, x, y, color):
+    label = pygame.font.SysFont('chalkduster.ttf', 72).render(text, True, color)
+    screen.blit(label, (x, y))
+
+
 # Klasa gracza
 class Player:
     """Klasa gracza."""
@@ -80,7 +86,7 @@ class Player:
         self.y = y
         self.moveSpeed = moveSpeed
         self.radius = radius
-        self.pistol = Pistol(self, Bullet, 8, 2)
+        self.pistol = Pistol(self, Bullet, 20, 2)
 
     def update(self):
         self.pistol.update()
@@ -179,14 +185,13 @@ class Pistol:
         self.reloadTime = reloadTime
         self.reloadStart = None
 
-
     def fire(self, target):
         if self.bulletsInClip > 0:
             self.bulletsInClip -= 1
             x, y = target
             bulletList.append(
                 self.bullet(self.owner.x, self.owner.y,
-                            normalize((x - (self.owner.x - offsetX), y - (self.owner.y - offsetY))), 10))
+                            normalize((x - (self.owner.x - offsetX), y - (self.owner.y - offsetY))), 20))
 
     def update(self):
         if self.reloadStart:
@@ -281,7 +286,7 @@ while running:
 
         # Wykrywanie kolizji przeciwników
         if checkCircleCollision(player, enemy):
-            bounce(enemy, player)
+            bounce(player, enemy)
 
         for secondEnemy in enemyList:
             if enemy != secondEnemy:
@@ -335,6 +340,11 @@ while running:
 
     for bullet in bulletList:
         bullet.draw()
+
+    newString = str(player.pistol.bulletsInClip) if player.pistol.reloadStart is None else "Reloading..."
+    draw_text(newString, 10, 10, (255, 100, 0))
+
+    draw_text(str(len(enemyList)), 10, 60, (255, 100, 0))
 
     pygame.display.update()
     clock.tick(FPS)
