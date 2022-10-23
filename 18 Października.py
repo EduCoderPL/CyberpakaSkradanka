@@ -7,7 +7,6 @@ from pygame.constants import *
 import random
 
 
-
 # Funkcje pozwalające rysować przezroczyste powierzchnie:
 def draw_rect_alpha(surface, color, rect):
     shape_surf = pygame.Surface(pygame.Rect(rect).size, pygame.SRCALPHA)
@@ -67,7 +66,7 @@ def mathClamp(number, minimum, maximum):
 
 # Wrzucasz wektor, zwracasz wektor długości 1.
 def normalize(vector):
-    vectorLength = (vector[0] ** 2 + vector[1] ** 2) ** (1 / 2)
+    vectorLength = (vector[0] ** 2 + vector[1] ** 2) ** (1 / 2) + 0.0001
     vectorToTargetNorm = (vector[0] / vectorLength, vector[1] / vectorLength)
     return vectorToTargetNorm
 
@@ -75,6 +74,40 @@ def normalize(vector):
 def draw_text(text, x, y, color):
     label = pygame.font.SysFont('chalkduster.ttf', 72).render(text, True, color)
     screen.blit(label, (x, y))
+
+
+class Line:
+    def __init__(self, startPoint, endPoint):
+        self.startPoint = startPoint
+        self.endPoint = endPoint
+        x1, y1 = self.startPoint
+        x2, y2 = self.endPoint
+        self.a = y1 - y2
+        self.b = x2 - x1
+        self.c = y1 * (x1 - x2) + x1 * (y2 - y1)
+
+    def checkIfIntersect(self, circle):
+        isTouchingLine = ((self.a * circle.x + self.b * circle.y + self.c) ** 2) < (circle.radius ** 2) * (
+                    (self.a ** 2) + (self.b ** 2))
+
+        minX, maxX = min(self.startPoint[0], self.endPoint[0]), max(self.startPoint[0], self.endPoint[0])
+        minY, maxY = min(self.startPoint[1], self.endPoint[1]), max(self.startPoint[1], self.endPoint[1])
+        isBetween = (minX < circle.x < maxX) or (minY < circle.y < maxY)
+        return isTouchingLine and isBetween
+
+    def setNewPos(self, startPoint, endPoint):
+        self.startPoint = startPoint
+        self.endPoint = endPoint
+        x1, y1 = self.startPoint
+        x2, y2 = self.endPoint
+        self.a = y1 - y2
+        self.b = x2 - x1
+        self.c = y1 * (x1 - x2) + x1 * (y2 - y1)
+
+    def draw(self):
+        x1, y1 = self.startPoint
+        x2, y2 = self.endPoint
+        pygame.draw.line(screen, (255, 0, 0), (x1 - offsetX, y1 - offsetY), (x2 - offsetX, y2 - offsetY))
 
 
 # Klasa gracza
@@ -87,9 +120,13 @@ class Player:
         self.moveSpeed = moveSpeed
         self.radius = radius
         self.pistol = Pistol(self, Bullet, 20, 2)
+        self.isHidden = False
+        self.trackPoint = Point(x, y)
 
     def update(self):
         self.pistol.update()
+        if not self.isHidden:
+            self.trackPoint.setPos((self.x, self.y))
 
     def draw(self):
         pygame.draw.circle(screen, (0, 0, 255), (self.x - offsetX, self.y - offsetY), self.radius)
@@ -131,13 +168,15 @@ class Tree:
 class Enemy:
     """Klasa przeciwnika, który chodzi dokładnie za nami i nas ściga."""
 
-    def __init__(self, x, y, target=None, speed=1):
+    def __init__(self, x, y, speed=1):
         self.x = x
         self.y = y
-        self.target = target
+        self.target = Point(x, y)
         self.radius = 20
         self.speed = speed
         self.bulletParticles = []
+        self.line = Line((0, 0), (0, 0))
+        self.isSeeingTarget = False
 
     def move(self):
         """Wróg porusza się w stronę celu."""
@@ -204,6 +243,16 @@ class Pistol:
             self.reloadStart = time.time()
 
 
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def setPos(self, pos):
+        self.x = pos[0]
+        self.y = pos[1]
+
+
 pygame.init()
 FPS = 60
 
@@ -224,7 +273,7 @@ bulletList = []
 # Tworzenie drzew
 
 
-for i in range(300):
+for i in range(100):
     randX = random.randint(-2000, 2000)
     randY = random.randint(-2000, 2000)
     randDiameter = random.randint(50, 100)
@@ -232,13 +281,13 @@ for i in range(300):
     treeList.append(tree)
 
 # Tworzenie przeciwników
-for i in range(60):
+for i in range(30):
     randX = random.randint(-2000, 2000)
     randY = random.randint(-2000, 2000)
     randDiameter = random.randint(100, 200)
     randSpeed = random.randint(1, 4)
 
-    enemy = Enemy(randX, randY, player, randSpeed)
+    enemy = Enemy(randX, randY, randSpeed)
     enemyList.append(enemy)
 
 pygame.event.set_allowed([QUIT, KEYDOWN, KEYUP])
@@ -261,7 +310,7 @@ while running:
     if keys[K_r]:
         player.pistol.reload()
 
-    # Zabezpieczanie gracza przed opuszczeniem obszaru;
+    # Sterowanie kamerą:
     if player.x - offsetX > SCREEN_WIDTH - 300:
         offsetX += ((player.x - offsetX) - (SCREEN_WIDTH - 300)) / 20
     if player.x - offsetX < 300:
@@ -273,9 +322,14 @@ while running:
         offsetY += (player.y - offsetY - 300) / 20
 
     player.update()
+
     # Wykrywanie kolizji drzew
+    player.isHidden = False
     for tree in treeList:
         tree.isPlayerInside = checkCircleCollision(player, tree)
+
+        if checkCircleCollision(player, tree):
+            player.isHidden = True
 
         if checkCircleCollision(player, tree.core):
             bounce(player, tree.core)
@@ -283,7 +337,7 @@ while running:
     # Akcje przeciwników
     for enemy in enemyList:
         enemy.move()
-
+        enemy.line.setNewPos((player.x, player.y), (enemy.x, enemy.y))
         # Wykrywanie kolizji przeciwników
         if checkCircleCollision(player, enemy):
             bounce(player, enemy)
@@ -292,32 +346,42 @@ while running:
             if enemy != secondEnemy:
                 if checkCircleCollision(enemy, secondEnemy):
                     bounce(enemy, secondEnemy)
-
+        counter = 0
+        enemy.isSeeingTarget = True
         for tree in treeList:
             if checkCircleCollision(enemy, tree.core):
                 bounce(enemy, tree.core)
+
+
+            if enemy.line.checkIfIntersect(tree):
+                counter += 1
+                enemy.isSeeingTarget = False
+
+        if enemy.isSeeingTarget and not player.isHidden:
+            enemy.target.setPos((player.x, player.y))
+
 
     for bullet in bulletList:
         bullet.move()
 
         for tree in treeList:
             if checkCircleCollision(bullet, tree.core):
-                bulletList.remove(bullet)
+                try:
+                    bulletList.remove(bullet)
+                except:
+                    pass
 
         for enemy in enemyList:
             if checkCircleCollision(bullet, enemy):
                 try:
                     bulletList.remove(bullet)
-                except:
-                    pass
-                try:
                     enemyList.remove(enemy)
                 except:
-                    continue
-
+                    pass
+    # TWORZENIE PRZECIWNIKÓW:
     if time.time() > nextSpawnTime:
         nextSpawnTime += 4
-        enemyList.append(Enemy(4000, random.randint(-2000, 2000), player, random.randint(1, 5)))
+        enemyList.append(Enemy(4000, random.randint(-2000, 2000), random.randint(1, 5)))
 
     # Bez tego nie wyjdziesz z gry
     for event in pygame.event.get():
@@ -327,6 +391,9 @@ while running:
         if event.type == pygame.MOUSEBUTTONDOWN:
             if pygame.mouse.get_pressed()[0]:
                 player.pistol.fire(pygame.mouse.get_pos())
+                if player.pistol.bulletsInClip > 0:
+                    for enemy in enemyList:
+                        enemy.target.setPos((player.x, player.y))
 
     # ================== RYSOWANIE OBIEKTÓW ====================
     screen.fill((0, 180, 0))
@@ -334,12 +401,14 @@ while running:
 
     for enemy in enemyList:
         enemy.draw()
-
-    for tree in treeList:
-        tree.draw()
+        enemy.line.draw()
+        pygame.draw.circle(screen, (255, 100, 100), (enemy.target.x - offsetX, enemy.target.y - offsetY), 5)
 
     for bullet in bulletList:
         bullet.draw()
+
+    for tree in treeList:
+        tree.draw()
 
     newString = str(player.pistol.bulletsInClip) if player.pistol.reloadStart is None else "Reloading..."
     draw_text(newString, 10, 10, (255, 100, 0))

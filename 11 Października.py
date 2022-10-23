@@ -291,7 +291,7 @@ while running:
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             if pygame.mouse.get_pressed()[0]:
-                bulletList.append(Bullet(player.x, playerr.))
+                bulletList.append(Bullet(player.x, player.y))
 
     # ================== RYSOWANIE OBIEKTÓW ====================
     screen.fill((0, 180, 0))
